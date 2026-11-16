@@ -16,6 +16,16 @@ type Tournament = {
   ruleset_version: string
 }
 
+type Participant = {
+  id: string
+  tpn: number | null
+  rating_snapshot: number | null
+  title_snapshot: string
+  federation_snapshot: string | null
+  registration_status: string
+  player: { full_name: string; fide_id: string | null; club: string | null }
+}
+
 type TournamentForm = {
   name: string
   slug: string
@@ -46,6 +56,12 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null)
+  const [participants, setParticipants] = useState<Participant[]>([])
+  const [participantName, setParticipantName] = useState('')
+  const [participantRating, setParticipantRating] = useState('')
+  const [participantTitle, setParticipantTitle] = useState('none')
+  const [participantFederation, setParticipantFederation] = useState('')
 
   useEffect(() => {
     if (!token) return
@@ -60,8 +76,64 @@ function App() {
       setError('Could not load tournaments.')
       return
     }
+
     const payload = (await response.json()) as { data: { data: Tournament[] } }
     setTournaments(payload.data.data)
+  }
+
+  async function loadParticipants(tournament: Tournament) {
+    if (!token) return
+    const response = await fetch(`${apiBaseUrl}/tournaments/${tournament.id}/participants`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      setError('Could not load participants.')
+      return
+    }
+    const payload = (await response.json()) as { data: { data: Participant[] } }
+    setSelectedTournament(tournament)
+    setParticipants(payload.data.data)
+  }
+
+  async function addParticipant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedTournament || !participantName.trim()) return
+    const response = await fetch(`${apiBaseUrl}/tournaments/${selectedTournament.id}/participants`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        full_name: participantName,
+        standard_rating: participantRating ? Number(participantRating) : null,
+        title: participantTitle,
+        federation_code: participantFederation || null,
+      }),
+    })
+    if (!response.ok) {
+      setError('Participant could not be added.')
+      return
+    }
+    setParticipantName('')
+    setParticipantRating('')
+    setParticipantFederation('')
+    await loadParticipants(selectedTournament)
+  }
+
+  async function lockParticipants() {
+    if (!token || !selectedTournament) return
+    const response = await fetch(`${apiBaseUrl}/tournaments/${selectedTournament.id}/lock-participants`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      setError('Participant list could not be locked.')
+      return
+    }
+    setNotice('Participant list locked and TPNs assigned using rating, title, and name.')
+    await loadParticipants(selectedTournament)
   }
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -206,7 +278,7 @@ function App() {
       <section className="mt-6 space-y-3">
         {tournaments.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">No tournaments yet.</div>}
         {tournaments.map((tournament) => (
-          <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" key={tournament.id}>
+          <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" key={tournament.id} onClick={() => void loadParticipants(tournament)}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{tournament.name}</h3>
@@ -218,6 +290,35 @@ function App() {
           </article>
         ))}
       </section>
+
+      {selectedTournament && (
+        <section className="mt-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">{selectedTournament.name} participants</h2>
+              <p className="mt-1 text-sm text-slate-600">{participants.length} registered · click Lock when the initial list is complete</p>
+            </div>
+            <button className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700" onClick={() => void lockParticipants()}>
+              Lock participant list
+            </button>
+          </div>
+          <form className="mt-6 grid gap-3 md:grid-cols-5" onSubmit={addParticipant}>
+            <input className="rounded border border-slate-300 px-3 py-2 md:col-span-2" placeholder="Full name" required value={participantName} onChange={(event) => setParticipantName(event.target.value)} />
+            <input className="rounded border border-slate-300 px-3 py-2" placeholder="Standard rating" type="number" min="0" max="4000" value={participantRating} onChange={(event) => setParticipantRating(event.target.value)} />
+            <select className="rounded border border-slate-300 px-3 py-2" value={participantTitle} onChange={(event) => setParticipantTitle(event.target.value)}>
+              {['none', 'GM', 'IM', 'FM', 'CM', 'WGM', 'WIM', 'WFM', 'WCM'].map((title) => <option key={title} value={title}>{title}</option>)}
+            </select>
+            <input className="rounded border border-slate-300 px-3 py-2" placeholder="Federation" maxLength={3} value={participantFederation} onChange={(event) => setParticipantFederation(event.target.value.toUpperCase())} />
+            <button className="rounded bg-blue-700 px-4 py-2 font-medium text-white md:col-span-5 md:justify-self-start" type="submit">Add participant</button>
+          </form>
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead><tr className="border-b border-slate-200 text-slate-600"><th className="px-3 py-2">TPN</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Title</th><th className="px-3 py-2">Rating</th><th className="px-3 py-2">Federation</th><th className="px-3 py-2">Status</th></tr></thead>
+              <tbody>{participants.map((participant) => <tr className="border-b border-slate-100" key={participant.id}><td className="px-3 py-2">{participant.tpn ?? '—'}</td><td className="px-3 py-2 font-medium">{participant.player.full_name}</td><td className="px-3 py-2">{participant.title_snapshot}</td><td className="px-3 py-2">{participant.rating_snapshot ?? '—'}</td><td className="px-3 py-2">{participant.federation_snapshot ?? '—'}</td><td className="px-3 py-2">{participant.registration_status}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </main>
   )
 }

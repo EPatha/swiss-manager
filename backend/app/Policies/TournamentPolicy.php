@@ -17,6 +17,11 @@ class TournamentPolicy
         return $user->is_platform_admin || $this->hasRole($user, $tournament, ['chief_arbiter', 'organizer']);
     }
 
+    public function manage(User $user, Tournament $tournament): bool
+    {
+        return $user->is_platform_admin || $this->hasRole($user, $tournament, ['chief_arbiter', 'organizer', 'arbiter']);
+    }
+
     private function hasRole(User $user, Tournament $tournament, array $roles): bool
     {
         return $tournament->users()

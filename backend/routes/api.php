@@ -14,5 +14,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/tournaments', [\App\Http\Controllers\Api\V1\TournamentController::class, 'index']);
         Route::post('/tournaments', [\App\Http\Controllers\Api\V1\TournamentController::class, 'store']);
         Route::get('/tournaments/{tournament}', [\App\Http\Controllers\Api\V1\TournamentController::class, 'show']);
+        Route::get('/tournaments/{tournament}/participants', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'index']);
+        Route::post('/tournaments/{tournament}/participants', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'store']);
+        Route::post('/tournaments/{tournament}/participants/import', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'import']);
+        Route::patch('/tournaments/{tournament}/participants/{participant}', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'update']);
+        Route::delete('/tournaments/{tournament}/participants/{participant}', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'destroy']);
+        Route::post('/tournaments/{tournament}/lock-participants', [\App\Http\Controllers\Api\V1\ParticipantController::class, 'lock']);
     });
 });
