@@ -26,6 +26,18 @@ Desktop.ini
 *.key
 *.p12
 *.pfx
+*.crt
+*.cer
+*.der
+*.secret
+*.secrets
+credentials.json
+credentials.yml
+credentials.yaml
+secrets.json
+secrets.yml
+secrets.yaml
+auth.json
 
 # Dependencies
 node_modules/
@@ -64,3 +76,4 @@ temp/
 *.db
 postgres-data/
 docker-data/
+storage/*.key

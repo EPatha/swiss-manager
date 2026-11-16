@@ -1,14 +1,89 @@
 services:
-  database:
-    image: postgres:16-alpine
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      PAIRING_ENGINE_URL: http://pairing-engine:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app
+      - internal
+
+  queue:
+    build:
+      context: ./backend
+    command: php artisan queue:work --tries=3 --timeout=120
+    env_file:
+      - .env
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - internal
+
+  pairing-engine:
+    build:
+      context: ./pairing-engine
+    expose:
+      - "8001"
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: openswiss
       POSTGRES_USER: openswiss
-      POSTGRES_PASSWORD: openswiss_dev
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openswiss -d openswiss"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
 
 volumes:
-  postgres-data:
+  postgres_data:
+  redis_data:
+
+networks:
+  app:
+  internal:
+    internal: true
